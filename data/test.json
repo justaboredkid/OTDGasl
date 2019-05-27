@@ -1,0 +1,107 @@
+[
+    {
+        "id": "A",
+        "hand": {
+            "pinky": true,
+            "ring": true,
+            "middle": true,
+            "index": true,
+            "thumb": false,
+            "palmLeft": true,
+            "palmRight": true,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": 0,
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "B",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": true,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": 0,
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "C",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": false,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": 90,
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "D",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": false,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": false,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": 90,
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "E",
+        "hand": {
+            "pinky": true,
+            "ring": true,
+            "middle": true,
+            "index": true,
+            "thumb": true,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": 0,
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    }
+]
