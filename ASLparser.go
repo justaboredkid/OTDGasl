@@ -27,6 +27,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -34,18 +35,60 @@ import (
 
 	"github.com/justaboredkid/OTDGasl/asllibs"
 
+	"github.com/paypal/gatt"
+	"github.com/paypal/gatt/examples/option"
+	"github.com/shantanubhadoria/go-kalmanfilter/kalmanfilter"
 	"github.com/warthog618/gpio"
 )
 
 var debug *bool
 var glove asllibs.Hand
-var dict []asllibs.ASLdict // slice of ASLdict, not pointer
+var dict []asllibs.ASLdict // slice of ASLdict, not
+var oldTime time.Time = time.Now()
+
+var myFilterData = new(kalmanfilter.FilterData)
 
 // Checks and reading GPIO
 func check(e error) {
 	if e != nil {
 		panic(e)
 	}
+}
+
+func bleServer() {
+	device, err := gatt.NewDevice(option.DefaultServerOptions...)
+	if err != nil {
+		log.Fatalf("Failed to open device, err: %s", err)
+	}
+
+	// Register optional handlers.
+	// note: implement a ID filter here to avoid tempering
+	device.Handle(
+		gatt.PeripheralConnected(func(p gatt.Peripheral, err error) { fmt.Println("Connect: ", p.ID()) }),
+		gatt.PeripheralDisconnected(func(p gatt.Peripheral, err error) { fmt.Println("Disconnect: ", p.ID()) }),
+	)
+
+	// A mandatory handler for monitoring device state.
+	onStateChanged := func(device gatt.Device, s gatt.State) {
+		fmt.Printf("State: %s\n", s)
+		switch s {
+		case gatt.StatePoweredOn:
+			// Setup GAP and GATT services for Linux implementation.
+			// OS X doesn't export the access of these services.
+			s := asllibs.OrientationData() // no effect on OS X
+			device.AddService(s)
+
+			// Advertise device name and service's UUIDs.
+			device.AdvertiseNameAndServices("OTDGasl", []gatt.UUID{s.UUID()})
+
+			// Advertise as an OpenBeacon iBeacon
+			device.AdvertiseIBeacon(gatt.MustParseUUID("d86e828c-658a-4373-9d4c-8a26c5cc73fd"), 1, 2, -59)
+
+		}
+	}
+
+	device.Init(onStateChanged)
+	select {}
 }
 
 func pinRead(pin *gpio.Pin) bool {
@@ -57,6 +100,8 @@ func pinRead(pin *gpio.Pin) bool {
 func init() {
 	err := gpio.Open()
 	check(err)
+
+	bleServer()
 
 	debug = flag.Bool("debug", false, "Enables Debug Logging")
 	flag.Parse()
@@ -104,12 +149,12 @@ func main() {
 		case sig := <-c:
 			gpio.Close()
 			fmt.Printf("Got %s signal. Exiting...\n", sig)
-			os.Exit(1)
+			os.Exit(0)
 		}
 	}()
 
 	// NOTE TO SELF: use location for signs pointing downwards (ie Q)
-	for true {
+	for {
 		glove = asllibs.Hand{
 			Pinky:     pinRead(gpio.NewPin(2)),
 			Ring:      pinRead(gpio.NewPin(3)),
