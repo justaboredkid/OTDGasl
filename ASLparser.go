@@ -28,25 +28,26 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/justaboredkid/OTDGasl/asllibs"
-
-	"github.com/paypal/gatt"
-	"github.com/paypal/gatt/examples/option"
-	"github.com/shantanubhadoria/go-kalmanfilter/kalmanfilter"
 	"github.com/warthog618/gpio"
 )
 
+var o asllibs.Orientation
 var debug *bool
+var parse bool
 var glove asllibs.Hand
 var dict []asllibs.ASLdict // slice of ASLdict, not
-var oldTime time.Time = time.Now()
-
-var myFilterData = new(kalmanfilter.FilterData)
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 // Checks and reading GPIO
 func check(e error) {
@@ -55,40 +56,47 @@ func check(e error) {
 	}
 }
 
-func bleServer() {
-	device, err := gatt.NewDevice(option.DefaultServerOptions...)
-	if err != nil {
-		log.Fatalf("Failed to open device, err: %s", err)
-	}
+// Main recognition
+func buttonRead() {
+	fmt.Println("ASL Parsing [STARTED]")
 
-	// Register optional handlers.
-	// note: implement a ID filter here to avoid tempering
-	device.Handle(
-		gatt.PeripheralConnected(func(p gatt.Peripheral, err error) { fmt.Println("Connect: ", p.ID()) }),
-		gatt.PeripheralDisconnected(func(p gatt.Peripheral, err error) { fmt.Println("Disconnect: ", p.ID()) }),
-	)
-
-	// A mandatory handler for monitoring device state.
-	onStateChanged := func(device gatt.Device, s gatt.State) {
-		fmt.Printf("State: %s\n", s)
-		switch s {
-		case gatt.StatePoweredOn:
-			// Setup GAP and GATT services for Linux implementation.
-			// OS X doesn't export the access of these services.
-			s := asllibs.OrientationData() // no effect on OS X
-			device.AddService(s)
-
-			// Advertise device name and service's UUIDs.
-			device.AdvertiseNameAndServices("OTDGasl", []gatt.UUID{s.UUID()})
-
-			// Advertise as an OpenBeacon iBeacon
-			device.AdvertiseIBeacon(gatt.MustParseUUID("d86e828c-658a-4373-9d4c-8a26c5cc73fd"), 1, 2, -59)
-
+	// NOTE TO SELF: use location for signs pointing downwards (ie Q)
+	go func() {
+		for {
+			// Graceful shutdown handling
+			if parse {
+				gpio.Close()
+				fmt.Printf("ASL parsing [STOPPED]")
+				return
+			}
+			glove = asllibs.Hand{
+				Pinky:     pinRead(gpio.NewPin(2)),
+				Ring:      pinRead(gpio.NewPin(3)),
+				Middle:    pinRead(gpio.NewPin(4)),
+				Index:     pinRead(gpio.NewPin(5)),
+				Thumb:     pinRead(gpio.NewPin(6)),
+				PalmLeft:  pinRead(gpio.NewPin(7)),
+				PalmRight: pinRead(gpio.NewPin(8)),
+				BackThumb: pinRead(gpio.NewPin(9)),
+				BackRing:  pinRead(gpio.NewPin(10)),
+				BetwIM:    pinRead(gpio.NewPin(11)),
+				BetwMR:    pinRead(gpio.NewPin(12)),
+				BetwRP:    pinRead(gpio.NewPin(13)),
+				Angle:     o,
+				Motion:    "",
+			}
+			time.Sleep(200 * time.Millisecond)
+			for i := range dict {
+				if glove == dict[i].Hand {
+					fmt.Printf("%v [MATCH]\n", dict[i].ID)
+				} else {
+					if *debug {
+						fmt.Printf("%v [NOT MATCHED]\n", dict[i].ID)
+					}
+				}
+			}
 		}
-	}
-
-	device.Init(onStateChanged)
-	select {}
+	}()
 }
 
 func pinRead(pin *gpio.Pin) bool {
@@ -100,8 +108,6 @@ func pinRead(pin *gpio.Pin) bool {
 func init() {
 	err := gpio.Open()
 	check(err)
-
-	bleServer()
 
 	debug = flag.Bool("debug", false, "Enables Debug Logging")
 	flag.Parse()
@@ -129,58 +135,39 @@ func init() {
 	check(err)
 }
 
-// Main recognition
 func main() {
-
 	if *debug {
 		for i := range dict {
 			fmt.Printf("ID: %v loaded\n", dict[i].ID)
 		}
 	}
 
-	fmt.Println("ASL Parsing [STARTED]")
-
-	// Graceful shutdown handling
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt)
-
-	go func() {
-		select {
-		case sig := <-c:
-			gpio.Close()
-			fmt.Printf("Got %s signal. Exiting...\n", sig)
-			os.Exit(0)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		var conn, err = upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Print(err)
+			return
 		}
-	}()
 
-	// NOTE TO SELF: use location for signs pointing downwards (ie Q)
-	for {
-		glove = asllibs.Hand{
-			Pinky:     pinRead(gpio.NewPin(2)),
-			Ring:      pinRead(gpio.NewPin(3)),
-			Middle:    pinRead(gpio.NewPin(4)),
-			Index:     pinRead(gpio.NewPin(5)),
-			Thumb:     pinRead(gpio.NewPin(6)),
-			PalmLeft:  pinRead(gpio.NewPin(7)),
-			PalmRight: pinRead(gpio.NewPin(8)),
-			BackThumb: pinRead(gpio.NewPin(9)),
-			BackRing:  pinRead(gpio.NewPin(10)),
-			BetwIM:    pinRead(gpio.NewPin(11)),
-			BetwMR:    pinRead(gpio.NewPin(12)),
-			BetwRP:    pinRead(gpio.NewPin(13)),
-			Angle:     -1,
-			Motion:    "",
-		}
-		time.Sleep(200 * time.Millisecond)
-		for i := range dict {
-			if glove == dict[i].Hand {
-				fmt.Printf("%v [MATCH]\n", dict[i].ID)
-			} else {
-				if *debug {
-					fmt.Printf("%v [NOT MATCHED]\n", dict[i].ID)
-				}
+		go func(c *websocket.Conn) {
+			_, msg, err := c.ReadMessage()
+			if err != nil {
+				fmt.Printf("[ERR] %v", err)
 			}
-		}
-	}
 
+			if msg == nil {
+
+			}
+
+			err = json.Unmarshal(msg, &o)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}(conn)
+	})
+	err := http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
+	buttonRead()
 }

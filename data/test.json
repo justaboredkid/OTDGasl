@@ -14,7 +14,11 @@
             "betwIM": true,
             "betwMR": true,
             "betwRP": true,
-            "angle": 0,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
             "motion": "",
             "dom": true
         },
@@ -35,7 +39,11 @@
             "betwIM": true,
             "betwMR": true,
             "betwRP": true,
-            "angle": 0,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
             "motion": "",
             "dom": true
         },
@@ -56,7 +64,11 @@
             "betwIM": true,
             "betwMR": true,
             "betwRP": true,
-            "angle": 90,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 90
+            },
             "motion": "",
             "dom": true
         },
@@ -77,7 +89,11 @@
             "betwIM": false,
             "betwMR": true,
             "betwRP": true,
-            "angle": 90,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 90
+            },
             "motion": "",
             "dom": true
         },
@@ -98,7 +114,11 @@
             "betwIM": true,
             "betwMR": true,
             "betwRP": true,
-            "angle": 0,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
             "motion": "",
             "dom": true
         },
