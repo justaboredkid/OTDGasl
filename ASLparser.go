@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/hashicorp/mdns"
 	"github.com/justaboredkid/OTDGasl/asllibs"
 	"github.com/warthog618/gpio"
 )
@@ -141,6 +142,14 @@ func main() {
 			fmt.Printf("ID: %v loaded\n", dict[i].ID)
 		}
 	}
+	// Setup our service export
+	host, _ := os.Hostname()
+	info := []string{"My awesome service"}
+	service, _ := mdns.NewMDNSService(host, "_foobar._tcp", "", "", 8000, nil, info)
+
+	// Create the mDNS server, defer shutdown
+	server, _ := mdns.NewServer(&mdns.Config{Zone: service})
+	defer server.Shutdown()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var conn, err = upgrader.Upgrade(w, r, nil)
