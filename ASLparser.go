@@ -30,11 +30,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/hashicorp/mdns"
+	"github.com/grandcat/zeroconf"
 	"github.com/justaboredkid/OTDGasl/asllibs"
 	"github.com/warthog618/gpio"
 )
@@ -142,14 +144,16 @@ func main() {
 			fmt.Printf("ID: %v loaded\n", dict[i].ID)
 		}
 	}
-	// Setup our service export
-	host, _ := os.Hostname()
-	info := []string{"My awesome service"}
-	service, _ := mdns.NewMDNSService(host, "_foobar._tcp", "", "", 8000, nil, info)
 
-	// Create the mDNS server, defer shutdown
-	server, _ := mdns.NewServer(&mdns.Config{Zone: service})
-	defer server.Shutdown()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-sig:
+		// Exit by user
+		gpio.Close()
+	case <-time.After(time.Second * 120):
+		// Exit by timeout
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var conn, err = upgrader.Upgrade(w, r, nil)
@@ -161,11 +165,12 @@ func main() {
 		go func(c *websocket.Conn) {
 			_, msg, err := c.ReadMessage()
 			if err != nil {
+				c.Close()
 				fmt.Printf("[ERR] %v\n", err)
 			}
 
 			if msg == nil {
-
+				fmt.Println("[ERR] No message from client")
 			}
 
 			err = json.Unmarshal(msg, &o)
@@ -174,10 +179,20 @@ func main() {
 				fmt.Println(err)
 			}
 		}(conn)
+		buttonRead()
 	})
+
+	go func() {
+		server, err := zeroconf.Register("OTDGasl", "_OTDGmain._tcp", "local.", 443, []string{"txtv=0", "lo=1", "la=2"}, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		defer server.Shutdown()
+	}()
+
 	err := http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
-	buttonRead()
 }
