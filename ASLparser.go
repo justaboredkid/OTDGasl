@@ -152,7 +152,7 @@ func main() {
 		go func(c *websocket.Conn) {
 			_, msg, err := c.ReadMessage()
 			if err != nil {
-				fmt.Printf("[ERR] %v", err)
+				fmt.Printf("[ERR] %v\n", err)
 			}
 
 			if msg == nil {
@@ -161,7 +161,8 @@ func main() {
 
 			err = json.Unmarshal(msg, &o)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				c.Close()
+				fmt.Println(err)
 			}
 		}(conn)
 	})
