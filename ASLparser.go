@@ -25,25 +25,23 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/grandcat/zeroconf"
 	"github.com/justaboredkid/OTDGasl/asllibs"
 	"github.com/warthog618/gpio"
 )
 
 var o asllibs.Orientation
 var debug *bool
+var local *bool
 var parse bool
+var err error
 var glove asllibs.Hand
 var dict []asllibs.ASLdict // slice of ASLdict, not
 var upgrader = websocket.Upgrader{
@@ -61,15 +59,14 @@ func check(e error) {
 
 // Main recognition
 func buttonRead() {
-	fmt.Println("ASL Parsing [STARTED]")
+	log.Println("ASL Parsing [STARTED]")
 
 	// NOTE TO SELF: use location for signs pointing downwards (ie Q)
 	go func() {
 		for {
 			// Graceful shutdown handling
-			if parse {
-				gpio.Close()
-				fmt.Printf("ASL parsing [STOPPED]")
+			if !parse {
+				log.Printf("ASL parsing [STOPPED]")
 				return
 			}
 			glove = asllibs.Hand{
@@ -91,11 +88,7 @@ func buttonRead() {
 			time.Sleep(200 * time.Millisecond)
 			for i := range dict {
 				if glove == dict[i].Hand {
-					fmt.Printf("%v [MATCH]\n", dict[i].ID)
-				} else {
-					if *debug {
-						fmt.Printf("%v [NOT MATCHED]\n", dict[i].ID)
-					}
+					log.Printf("%v [MATCH]\n", dict[i].ID)
 				}
 			}
 		}
@@ -113,7 +106,12 @@ func init() {
 	check(err)
 
 	debug = flag.Bool("debug", false, "Enables Debug Logging")
+	local = flag.Bool("local", false, "Starts in http only. DO NOT USE IN PRODUCTION")
 	flag.Parse()
+
+	if *local {
+		log.Println("[WARN] HTTP only mode. If you are seeing this message in production, you left the -local flag enabled")
+	}
 
 	// Go thorugh all files and folders in "data/"
 	err = filepath.Walk("data/",
@@ -131,7 +129,7 @@ func init() {
 
 			f, err := ioutil.ReadFile(path)
 			check(err)
-			fmt.Printf("%v loaded\n", path[5:])
+			log.Printf("[ASL FILE] %v loaded\n", path[5:])
 			json.Unmarshal(f, &dict)
 			return nil
 		})
@@ -141,58 +139,73 @@ func init() {
 func main() {
 	if *debug {
 		for i := range dict {
-			fmt.Printf("ID: %v loaded\n", dict[i].ID)
+			log.Printf("[ASL LOAD] ID: %v loaded\n", dict[i].ID)
 		}
-	}
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-sig:
-		// Exit by user
-		gpio.Close()
-	case <-time.After(time.Second * 120):
-		// Exit by timeout
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var conn, err = upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Print(err)
+			log.Println(err)
 			return
 		}
 
 		go func(c *websocket.Conn) {
+			log.Printf("[WS] %v CONNECTED", c.RemoteAddr())
 			_, msg, err := c.ReadMessage()
 			if err != nil {
 				c.Close()
-				fmt.Printf("[ERR] %v\n", err)
+				log.Printf("[ERR] %v\n", err)
 			}
 
 			if msg == nil {
-				fmt.Println("[ERR] No message from client")
+				log.Println("[ERR] Null message from client")
+			} else {
+				err = json.Unmarshal(msg, &o)
+				if *debug {
+					log.Println(&o)
+				}
+				if err != nil {
+					c.Close()
+					log.Println(err)
+				}
+			}
+			select {
+			case <-time.After(5 * time.Second):
+				c.Close()
+				log.Println("[WS] Inactive, closing connection...")
+				parse = false
 			}
 
-			err = json.Unmarshal(msg, &o)
-			if err != nil {
-				c.Close()
-				fmt.Println(err)
-			}
 		}(conn)
+
+		parse = true
 		buttonRead()
 	})
-
-	go func() {
-		server, err := zeroconf.Register("OTDGasl", "_OTDGmain._tcp", "local.", 443, []string{"txtv=0", "lo=1", "la=2"}, nil)
+	// deal with this later, deadline is approaching
+	/* 	go func() {
+		info := []string{"OTDG main glove"}
+		service, err := mdns.NewMDNSService("otdgtest", "_otdgmain._tcp", "", "", 8000, nil, info)
 		if err != nil {
-			panic(err)
+			log.Fatal("[ERR] mDNS Service: ", err)
 		}
 
-		defer server.Shutdown()
-	}()
+		_, err = mdns.NewServer(&mdns.Config{Zone: service})
+		log.Println("[mDNS] Server Started")
+		if err != nil {
+			log.Fatal("[ERR] mDNS Server: ", err)
+		}
+	}() */
 
-	err := http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
+	if *local {
+		log.Println("[HTTP (insecure)] Server Started")
+		err = http.ListenAndServe(":80", nil)
+	} else {
+		log.Println("[HTTPS] Server Started")
+		err = http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
+	}
+
 	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+		log.Fatal("[ERR] ListenAndServe: ", err)
 	}
 }
