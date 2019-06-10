@@ -123,5 +123,180 @@
             "dom": true
         },
         "location": "hand"
+    },
+    {
+        "id": "F",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": true,
+            "thumb": true,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": false,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 90
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "H",
+        "hand": {
+            "pinky": true,
+            "ring": true,
+            "middle": false,
+            "index": false,
+            "thumb": true,
+            "palmLeft": true,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": false,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 180
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "L",
+        "hand": {
+            "pinky": true,
+            "ring": true,
+            "middle": true,
+            "index": false,
+            "thumb": false,
+            "palmLeft": true,
+            "palmRight": true,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": false,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "O",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": false,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 90
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "W",
+        "hand": {
+            "pinky": true,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": true,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": false,
+            "betwMR": false,
+            "betwRP": false,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "R",
+        "hand": {
+            "pinky": true,
+            "ring": true,
+            "middle": false,
+            "index": false,
+            "thumb": true,
+            "palmLeft": true,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": true,
+            "betwIM": false,
+            "betwMR": false,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
+            "motion": "",
+            "dom": true
+        },
+        "location": "hand"
+    },
+    {
+        "id": "Blue",
+        "hand": {
+            "pinky": false,
+            "ring": false,
+            "middle": false,
+            "index": false,
+            "thumb": true,
+            "palmLeft": false,
+            "palmRight": false,
+            "backThumb": false,
+            "backRing": false,
+            "betwIM": true,
+            "betwMR": true,
+            "betwRP": true,
+            "angle": {
+                "alpha": 0,
+                "beta": 0,
+                "gamma": 0
+            },
+            "motion": "wristTwist",
+            "dom": true
+        },
+        "location": "hand"
     }
 ]

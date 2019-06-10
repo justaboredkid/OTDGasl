@@ -29,6 +29,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 
 var o asllibs.Orientation
 var debug *bool
+var noOrien *bool
 var local *bool
 var parse bool
 var err error
@@ -60,12 +62,16 @@ func check(e error) {
 // Main recognition
 func buttonRead() {
 	log.Println("ASL Parsing [STARTED]")
-
+	if !parse {
+		log.Println("[ERR] Parse bool not true.")
+	}
 	// NOTE TO SELF: use location for signs pointing downwards (ie Q)
-	go func() {
+
+	if *noOrien {
+		log.Println("[WARN] Orientation sensors disabled, interperetation limited")
 		for {
-			// Graceful shutdown handling
 			if !parse {
+				gpio.Close()
 				log.Printf("ASL parsing [STOPPED]")
 				return
 			}
@@ -82,8 +88,52 @@ func buttonRead() {
 				BetwIM:    pinRead(gpio.NewPin(11)),
 				BetwMR:    pinRead(gpio.NewPin(12)),
 				BetwRP:    pinRead(gpio.NewPin(13)),
-				Angle:     o,
-				Motion:    "",
+				Angle: asllibs.Orientation{
+					Alpha: 0,
+					Beta:  0,
+					Gamma: 0,
+				},
+				Motion: "",
+				Dom:    true,
+			}
+
+			time.Sleep(200 * time.Millisecond)
+			for i := range dict {
+				if glove == dict[i].Hand {
+					log.Printf("%v [MATCH]\n", dict[i].ID)
+				}
+			}
+		}
+	}
+
+	go func() {
+		for {
+			// Graceful shutdown handling
+			if !parse {
+				gpio.Close()
+				log.Printf("ASL parsing [STOPPED]")
+				return
+			}
+			glove = asllibs.Hand{
+				Pinky:     pinRead(gpio.NewPin(2)),
+				Ring:      pinRead(gpio.NewPin(3)),
+				Middle:    pinRead(gpio.NewPin(4)),
+				Index:     pinRead(gpio.NewPin(5)),
+				Thumb:     pinRead(gpio.NewPin(6)),
+				PalmLeft:  pinRead(gpio.NewPin(7)),
+				PalmRight: pinRead(gpio.NewPin(8)),
+				BackThumb: pinRead(gpio.NewPin(9)),
+				BackRing:  pinRead(gpio.NewPin(10)),
+				BetwIM:    pinRead(gpio.NewPin(11)),
+				BetwMR:    pinRead(gpio.NewPin(12)),
+				BetwRP:    pinRead(gpio.NewPin(13)),
+				Angle: asllibs.Orientation{
+					Alpha: 0,
+					Beta:  0,
+					Gamma: o.Gamma,
+				},
+				Motion: "",
+				Dom:    true,
 			}
 			time.Sleep(200 * time.Millisecond)
 			for i := range dict {
@@ -96,16 +146,17 @@ func buttonRead() {
 }
 
 func pinRead(pin *gpio.Pin) bool {
-	pin.PullUp()
 	pin.Input()
-	return bool(pin.Read())
+	pin.PullUp()
+	if *debug && !bool(pin.Read()) == true {
+		log.Printf("[INFO] %v button pressed\n", pin)
+	}
+	return !bool(pin.Read())
 }
 
 func init() {
-	err := gpio.Open()
-	check(err)
-
 	debug = flag.Bool("debug", false, "Enables Debug Logging")
+	noOrien = flag.Bool("noOrien", false, "Ignores orientation and WS connect. Will limit interpretation")
 	local = flag.Bool("local", false, "Starts in http only. DO NOT USE IN PRODUCTION")
 	flag.Parse()
 
@@ -134,6 +185,43 @@ func init() {
 			return nil
 		})
 	check(err)
+
+	go func() {
+		sigchan := make(chan os.Signal, 10)
+		signal.Notify(sigchan, os.Interrupt)
+		<-sigchan
+		log.Println("[INFO] Program exiting")
+
+		if parse {
+			parse = false
+			gpio.Close()
+		}
+		os.Exit(0)
+	}()
+
+}
+
+// By Artem Co on stackOverflow
+func keepAlive(c *websocket.Conn, timeout time.Duration) {
+	lastResponse := time.Now()
+	c.SetPongHandler(func(msg string) error {
+		lastResponse = time.Now()
+		return nil
+	})
+
+	go func() {
+		for {
+			err := c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
+			if err != nil {
+				return
+			}
+			time.Sleep(timeout / 2)
+			if time.Now().Sub(lastResponse) > timeout {
+				c.Close()
+				return
+			}
+		}
+	}()
 }
 
 func main() {
@@ -144,40 +232,44 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		gpio.Open()
+		check(err)
+
 		var conn, err = upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		go func(c *websocket.Conn) {
-			log.Printf("[WS] %v CONNECTED", c.RemoteAddr())
-			_, msg, err := c.ReadMessage()
-			if err != nil {
-				c.Close()
-				log.Printf("[ERR] %v\n", err)
-			}
+		keepAlive(conn, 2*time.Second)
+		log.Printf("[WS] %v CONNECTED", conn.RemoteAddr())
 
-			if msg == nil {
-				log.Println("[ERR] Null message from client")
-			} else {
-				err = json.Unmarshal(msg, &o)
-				if *debug {
-					log.Println(&o)
-				}
+		go func() {
+			for {
+				_, msg, err := conn.ReadMessage()
 				if err != nil {
-					c.Close()
-					log.Println(err)
+					log.Printf("[ERR] %v\n", err)
+
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("[WS] Connection Closed")
+					}
+					break
+				}
+
+				if msg == nil {
+					log.Println("[ERR] Null message from client")
+				} else {
+					err = json.Unmarshal(msg, &o)
+					if *debug {
+						// WS debug here
+					}
+					if err != nil {
+						log.Println(err)
+					}
+
 				}
 			}
-			select {
-			case <-time.After(5 * time.Second):
-				c.Close()
-				log.Println("[WS] Inactive, closing connection...")
-				parse = false
-			}
-
-		}(conn)
+		}()
 
 		parse = true
 		buttonRead()
@@ -197,15 +289,21 @@ func main() {
 		}
 	}() */
 
-	if *local {
-		log.Println("[HTTP (insecure)] Server Started")
-		err = http.ListenAndServe(":80", nil)
+	if *noOrien {
+		gpio.Open()
+		parse = true
+		buttonRead()
 	} else {
-		log.Println("[HTTPS] Server Started")
-		err = http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
-	}
+		if *local {
+			log.Println("[HTTP (insecure)] Server Started")
+			err = http.ListenAndServe(":80", nil)
+		} else {
+			log.Println("[HTTPS] Server Started")
+			err = http.ListenAndServeTLS(":443", "certs/server.pem", "certs/key.pem", nil)
+		}
 
-	if err != nil {
-		log.Fatal("[ERR] ListenAndServe: ", err)
+		if err != nil {
+			log.Fatal("[ERR] ListenAndServe: ", err)
+		}
 	}
 }
