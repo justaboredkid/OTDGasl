@@ -25,6 +25,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -45,7 +46,7 @@ var local *bool
 var parse bool
 var err error
 var glove asllibs.Hand
-var dict []asllibs.ASLdict // slice of ASLdict, not
+var dict []asllibs.ASLdict
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -159,6 +160,18 @@ func init() {
 	noOrien = flag.Bool("noOrien", false, "Ignores orientation and WS connect. Will limit interpretation")
 	local = flag.Bool("local", false, "Starts in http only. DO NOT USE IN PRODUCTION")
 	flag.Parse()
+
+	logFile, err := os.OpenFile("log.txt", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+
+	if *debug {
+		lw := io.MultiWriter(os.Stdout, logFile)
+		log.SetOutput(lw)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 
 	if *local {
 		log.Println("[WARN] HTTP only mode. If you are seeing this message in production, you left the -local flag enabled")
